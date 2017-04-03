@@ -1,0 +1,22 @@
+extends layout
+
+block content
+  h1= title
+  p Upload a photo or provide a URL and get the Spotify playlists that fit!
+
+  h2 Cogntive Services Computer Vision
+  ul
+    each tag in tags
+      li= tag.name + "," + tag.confidence
+
+  h2 Cogntive Services Emotion
+  ul
+    each emot in emotions
+      li= emot
+
+  h2 Spotify Playlists
+  ul
+    each play in playlists
+      li= play.name
+
+  <input type="file" capture="camera" accept="image/*" id="cameraInput" name="cameraInput">
