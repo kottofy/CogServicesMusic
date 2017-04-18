@@ -1,6 +1,7 @@
 var express = require('express')
 var router = express.Router();
 var request = require('request');
+const fs = require('fs');
 
 Tag = require('../models/tag');
 Playlist = require('../models/playlist.js');
@@ -13,7 +14,8 @@ module.exports = function (app) {
 var tags = [];
 var playlists = [];
 var emotions = [];
-var image_url = "https://img.wikinut.com/img/313nm57sx91edif9/jpeg/700x1000/Judgement-Day.jpeg";
+var image_url = "http://static2.businessinsider.com/image/563246309dd7cc25008c5b20/amazons-live-video-network-twitch-is-showing-every-episode-of-bob-ross-the-joy-of-painting-in-an-epic-marathon.jpg";
+var image_address = "images/bob2.jpg";
 
 var compvisionkey = process.env.compvisionkey;
 var emotionkey = process.env.emotionkey;
@@ -22,8 +24,16 @@ var clientSecret = process.env.clientSecret;
 
 router.get('/', function (req, res, next) {
 
-  CompVisionRequest(function doThis() {
-    EmotionAPIRequest(function doThisNow() {
+//TODO: Fix Stream Emotion API 
+  // CompVisionRequestStream(function doThis() {
+  //   EmotionAPIRequestStream(function doThisNext() {
+  //     GetSpotifyPlaylists(sendRender)
+  //   })
+  // });
+
+
+   CompVisionRequest(function doThis() {
+    EmotionAPIRequest(function doThisNext() {
       GetSpotifyPlaylists(sendRender)
     })
   });
@@ -38,8 +48,43 @@ router.get('/', function (req, res, next) {
   };
 });
 
-function CompVisionRequest(callback) {
+function CompVisionRequestStream(callback) {
+  var uri = "https://westus.api.cognitive.microsoft.com/vision/v1.0/analyze?visualFeatures=Tags&language=en";
+  var options = {
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "Ocp-Apim-Subscription-Key": compvisionkey
+    }
+  };
+
+  try {
+    fs.createReadStream(image_address).pipe(request.post(uri, options, function (error, response, body) {
+
+      console.log("COMP VISION FILE UPLOAD TAGS: " + body);
+
+      var tgs = JSON.parse(body).tags;
+
+      ParseTags(tgs, callback);
+    }));
+  }
+  catch (ex) {
+    console.log("Error: " + ex);
+    return;
+  }
+}
+
+function ParseTags(tgs, callback) {
   tags = [];
+ for (var key in tgs) {
+        var tag = new Tag(tgs[key]);
+        tags.push(tag);
+      };
+
+      console.log(tags);
+      callback();
+}
+
+function CompVisionRequest(callback) {
   var uri = "https://westus.api.cognitive.microsoft.com/vision/v1.0/analyze?visualFeatures=Tags&language=en";
 
   request({
@@ -52,21 +97,77 @@ function CompVisionRequest(callback) {
     body: JSON.stringify({ url: image_url })
   },
     function (error, response, body) {
+
+      console.log("COMP VISION URL TAGS: " + body);
+
       var tgs = JSON.parse(body).tags;
 
-      for (var key in tgs) {
-        var tag = new Tag(tgs[key]);
-        tags.push(tag);
-      };
-
-      // console.log(tags);
-      callback();
+      ParseTags(tgs, callback);
     });
+}
 
+function EmotionAPIRequestStream(callback) {
+  var uri = "https://westus.api.cognitive.microsoft.com/emotion/v1.0/recognize";
+  var options = {
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "Ocp-Apim-Subscription-Key": emotionkey
+    }
+  };
+
+  try {
+    fs.createReadStream(image_address).pipe(request.post(uri, options, function (error, response, body) {
+
+      if (error) {
+        console.log("EMOTIONS ERROR: " + error);
+      }
+      else {
+        console.log("EMOTION FILE UPLOAD EMOTIONS: " + body);
+        var emots = JSON.parse(body);
+        CategorizeEmotions(emots);
+        callback();
+      }
+    }));
+  }
+  catch (ex) {
+    console.log("Error: " + ex);
+    return;
+  }
+}
+
+function CategorizeEmotions(emots) {
+  emotions = [];
+
+  var heavy = false, mellow = false, happy = false, sadness = false;
+
+  for (var key in emots) {
+    var emot = new Emotion(emots[key]);
+
+    if (emot.scores.anger >= 0.75 || emot.scores.contempt >= 0.75 || emot.scores.disgust >= 0.75) {
+      if (!heavy)
+        emotions.push("heavy");
+      heavy = true;
+    }
+    if (emot.scores.fear >= 0.75) {
+      if (!mellow)
+        emotions.push("mellow");
+      mellow = true;
+    }
+    if (emot.scores.sadness >= 0.75) {
+      if (!sadness)
+        emotions.push("sadness");
+      sadness = true;
+    }
+    if (emot.scores.happiness >= 0.75 || emot.scores.neutral >= 0.75) {
+      if (!happy)
+        emotions.push("happy");
+      happy = true;
+    }
+  }
+  console.log("EMOTIONS CATEGORIZED: " + emotions);
 }
 
 function EmotionAPIRequest(callback) {
-  emotions = [];
 
   var uri = "https://westus.api.cognitive.microsoft.com/emotion/v1.0/recognize";
 
@@ -80,38 +181,20 @@ function EmotionAPIRequest(callback) {
     body: JSON.stringify({ url: image_url })
   },
     function (error, response, body) {
-      var emots = JSON.parse(body);
-      var heavy = false, mellow = false, happy = false, sadness = false;
 
-      for (var key in emots) {
-        var emot = new Emotion(emots[key]);
+      if (error)
+        console.log("EMOTIONS ERROR: " + error);
+      else {
+        console.log("EMOTIONS: " + body);
 
-        if (emot.scores.anger >= 0.75 || emot.scores.contempt >= 0.75 || emot.scores.disgust >= 0.75) {
-          if (!heavy)
-            emotions.push("heavy");
-          heavy = true;
-        }
-        if (emot.scores.fear >= 0.75) {
-          if (!mellow)
-            emotions.push("mellow");
-          mellow = true;
-        }
-           if ( emot.scores.sadness >= 0.75) {
-          if (!sadness)
-            emotions.push("sadness");
-          sadness = true;
-        }
-        if (emot.scores.happiness >= 0.75 || emot.scores.neutral >= 0.75) {
-          if (!happy)
-            emotions.push("happy");
-          happy = true;
-        }
-      };
+        var emots = JSON.parse(body);
 
-      console.log(emotions);
-      callback();
+        CategorizeEmotions(emots);
+
+        console.log(emotions);
+        callback();
+      }
     });
-
 }
 
 function GetSpotifyPlaylists(callback) {
@@ -131,7 +214,7 @@ function GetSpotifyPlaylists(callback) {
       querylist += " " + (taglist[key].name).replace(/[^a-zA-Z ]/g, " ");
   }
 
-  console.log(querylist);
+  console.log("SPOTIFY QUERY LIST: " + querylist);
 
   var queries = { q: querylist, type: "playlist" };
 
