@@ -24,13 +24,55 @@ var clientSecret = process.env.clientSecret;
 
 router.get('/', function (req, res, next) {
 
-//TODO: Fix Stream Emotion API 
-  // CompVisionRequestStream(function doThis() {
-  //   EmotionAPIRequestStream(function doThisNext() {
-  //     GetSpotifyPlaylists(sendRender)
-  //   })
-  // });
+  sendRender();
 
+  function sendRender() {
+    res.render('home', {
+    })
+  };
+});
+
+router.post('/upload', function (req, res, next) { 
+
+if (!req.files)
+    return res.status(400).send('No files were uploaded.');
+ 
+  // The name of the input field (i.e. "sampleFile") is used to retrieve the uploaded file 
+let file= req.files.file;
+
+//TODO: Fix upload to server, maybe store in DB instead?
+image_address = './uploads/' + file.name;
+ 
+  // Use the mv() method to place the file somewhere on your server 
+file.mv('../uploads/' + file.name, function(err) {
+    if (err)
+      return res.status(500).send(err);
+ 
+    console.log("File uploaded");
+  });
+
+  //TODO: Fix Stream Emotion API 
+  CompVisionRequestStream(function doThis() {
+    EmotionAPIRequestStream(function doThisNext() {
+      GetSpotifyPlaylists(sendRender)
+    })
+  });
+
+  function sendRender() {
+    res.render('index', {
+      tags: tags,
+      playlists: playlists,
+      emotions: emotions
+    })
+  };
+}); 
+
+router.post('/url', function (req, res, next) {
+
+  image_url = req.body.url;
+
+console.log(req.body);
+  console.log("Image url: " + image_url);
 
    CompVisionRequest(function doThis() {
     EmotionAPIRequest(function doThisNext() {
@@ -40,13 +82,12 @@ router.get('/', function (req, res, next) {
 
   function sendRender() {
     res.render('index', {
-      title: 'Cognitive Services Music App',
       tags: tags,
       playlists: playlists,
       emotions: emotions
     })
   };
-});
+}); 
 
 function CompVisionRequestStream(callback) {
   var uri = "https://westus.api.cognitive.microsoft.com/vision/v1.0/analyze?visualFeatures=Tags&language=en";

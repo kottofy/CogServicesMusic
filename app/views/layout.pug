@@ -10,4 +10,18 @@ html(lang='en')
       if ENV_DEVELOPMENT
         script(src='http://localhost:35729/livereload.js')
   body
+    h1 Cognitive Services Music App!
+    p Upload a photo or provide a URL and get the Spotify playlists that fit!
+
+    form(ref="uploadForm", id="uploadForm", action="/upload", method="post", enctype="multipart/form-data")
+      input(id="file", type="file", name="file", placeholder="Browse for file")
+      input(type="submit", value="Upload")
+
+    br
+    br
+
+    form(id="urlForm", action="/url", method="post")
+      input(type="text", placeholder="Enter URL", id="url", name="url")
+      input(type="submit", value="Submit")
+
     block content

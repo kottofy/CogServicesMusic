@@ -1,24 +1,13 @@
 extends layout
 
 block content
-  h1= title
-  p Upload a photo or provide a URL and get the Spotify playlists that fit!
 
-    #container
-    <input type="file" capture="camera" accept="image/*" id="cameraInput" name="cameraInput"/>
-
-    </br>
-    </br>
-
-    #container
-    <input type="text" id="urlInput" name="urlInput"/>
-
-  h2 Cogntive Services Computer Vision
+  h2 Cognitive Services Computer Vision
   ul
     each tag in tags
       li= tag.name + "," + tag.confidence
 
-  h2 Cogntive Services Emotion
+  h2 Cognitive Services Emotion
   ul
     each emot in emotions
       li= emot
