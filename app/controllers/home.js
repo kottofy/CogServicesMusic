@@ -24,6 +24,10 @@ var clientSecret = process.env.clientSecret;
 
 router.get('/', function (req, res, next) {
 
+  tags = [];
+  playlists = [];
+  emotions = [];
+
   sendRender();
 
   function sendRender() {
@@ -33,6 +37,10 @@ router.get('/', function (req, res, next) {
 });
 
 router.post('/upload', function (req, res, next) {
+
+  tags = [];
+  playlists = [];
+  emotions = [];
 
   if (!req.files || req.files.file == undefined) {
     return res.status(400).send('No files were uploaded.');
@@ -61,30 +69,32 @@ router.post('/upload', function (req, res, next) {
         });
       });
     });
+
+    function sendRender(res) {
+      res.render('index', {
+        tags: tags,
+        playlists: playlists,
+        emotions: emotions
+      })
+    };
   }
 
   function convertFileToBuffer(fileData, callback) {
-
-
     buffer = toBuffer(fileData);
 
     function toBuffer(ab) {
-
       return Buffer.from(ab);
     }
     callback();
   }
 
-  function sendRender() {
-    res.render('index', {
-      tags: tags,
-      playlists: playlists,
-      emotions: emotions
-    })
-  };
 });
 
 router.post('/url', function (req, res, next) {
+
+  tags = [];
+  playlists = [];
+  emotions = [];
 
   image_url = req.body.url;
 
@@ -93,7 +103,6 @@ router.post('/url', function (req, res, next) {
       GetSpotifyPlaylists(sendRender)
     })
   });
-
   function sendRender() {
     res.render('index', {
       tags: tags,
@@ -344,11 +353,12 @@ function GetSpotifyPlaylists(callback) {
           else {
             for (var key in body.playlists.items) {
               var play = new Playlist(body.playlists.items[key]);
+              play.url = "https://open.spotify.com/embed?uri=" + body.playlists.items[key].uri + "&theme=white&view=coverart";
               playlists.push(play);
             };
-            //console.log(playlists);
-          }
 
+            // console.log(playlists);
+          }
           callback();
         }
       });

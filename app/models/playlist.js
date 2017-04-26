@@ -12,6 +12,7 @@ function Playlist(opts) {
     this.tracks = opts.tracks || '';
     this.type = opts.type || '';
     this.uri = opts.uri || '';
+    this.url = opts.url || '';
 }
 
 module.exports = Playlist;
