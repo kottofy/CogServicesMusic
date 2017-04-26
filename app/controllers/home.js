@@ -66,17 +66,11 @@ router.post('/upload', function (req, res, next) {
   function convertFileToBuffer(fileData, callback) {
 
 
-buffer = toBuffer(fileData);
+    buffer = toBuffer(fileData);
 
     function toBuffer(ab) {
 
       return Buffer.from(ab);
-      // var buf = new Buffer(ab.byteLength);
-      // var view = new Uint8Array(ab);
-      // for (var i = 0; i < buf.length; ++i) {
-      //   buf[i] = view[i];
-      // }
-      // return buf;
     }
     callback();
   }
@@ -199,6 +193,7 @@ function CompVisionRequest(callback) {
 }
 
 function EmotionAPIRequestStream(filePath, callback) {
+
   var uri = "https://westus.api.cognitive.microsoft.com/emotion/v1.0/recognize";
   var options = {
     headers: {
@@ -207,23 +202,28 @@ function EmotionAPIRequestStream(filePath, callback) {
     }
   };
 
-  try {
-    fs.createReadStream(filePath).pipe(request.post(uri, options, function (error, response, body) {
+  postImageSync(filePath, options, callback);
 
-      if (error) {
-        console.log("EMOTIONS ERROR: " + error);
-      }
-      else {
+  function postImageSync(image, options) {
+    request.post({
+      uri: uri,
+      headers: {
+        'Ocp-Apim-Subscription-Key': emotionkey,
+        'Content-Type': 'application/octet-stream'
+      },
+      qs: options,
+      body: fs.readFileSync(image)
+    }, (error, response, body) => {
+      if (!error) {
         console.log("EMOTION FILE UPLOAD EMOTIONS: " + body);
         var emots = JSON.parse(body);
         CategorizeEmotions(emots);
         callback();
       }
-    }));
-  }
-  catch (ex) {
-    console.log("Error: " + ex);
-    return;
+      else {
+        console.log("EMOTIONS ERROR: " + error);
+      }
+    });
   }
 }
 
