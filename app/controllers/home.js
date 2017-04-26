@@ -2,6 +2,7 @@ var express = require('express')
 var router = express.Router();
 var request = require('request');
 const fs = require('fs');
+var azure = require('azure-storage');
 
 Tag = require('../models/tag');
 Playlist = require('../models/playlist.js');
@@ -14,8 +15,7 @@ module.exports = function (app) {
 var tags = [];
 var playlists = [];
 var emotions = [];
-var image_url = "http://static2.businessinsider.com/image/563246309dd7cc25008c5b20/amazons-live-video-network-twitch-is-showing-every-episode-of-bob-ross-the-joy-of-painting-in-an-epic-marathon.jpg";
-var image_address = "images/bob2.jpg";
+var buffer;
 
 var compvisionkey = process.env.compvisionkey;
 var emotionkey = process.env.emotionkey;
@@ -32,31 +32,54 @@ router.get('/', function (req, res, next) {
   };
 });
 
-router.post('/upload', function (req, res, next) { 
+router.post('/upload', function (req, res, next) {
 
-if (!req.files)
-    return res.status(400).send('No files were uploaded.');
- 
-  // The name of the input field (i.e. "sampleFile") is used to retrieve the uploaded file 
-let file= req.files.file;
+  if (!req.files || req.files.file == undefined) {
+    return res.status(400).send('No files were uploaded.');
+  }
+  else {
+    var file = req.files.file;
 
-//TODO: Fix upload to server, maybe store in DB instead?
-image_address = './uploads/' + file.name;
- 
-  // Use the mv() method to place the file somewhere on your server 
-file.mv('../uploads/' + file.name, function(err) {
-    if (err)
-      return res.status(500).send(err);
- 
-    console.log("File uploaded");
-  });
+    convertFileToBuffer(file.data, function doThis() {
+      fs.readFile(buffer, function (err) {
+        var path = __dirname + "\\uploads\\uploadedFile.jpg";
+        fs.writeFile(path, buffer, function (err) {
+          if (!err) {
+            console.log("File moved to server");
 
-  //TODO: Fix Stream Emotion API 
-  CompVisionRequestStream(function doThis() {
-    EmotionAPIRequestStream(function doThisNext() {
-      GetSpotifyPlaylists(sendRender)
-    })
-  });
+            //TODO: Fix Stream Emotion API 
+            AddFileToStorage(path, file.name);
+            CompVisionRequestStream(path, function doThis() {
+              EmotionAPIRequestStream(path, function doThisNext() {
+                GetSpotifyPlaylists(sendRender)
+              })
+            });
+          }
+          else {
+            console.log("Error: " + err);
+          }
+        });
+      });
+    });
+  }
+
+  function convertFileToBuffer(fileData, callback) {
+
+
+buffer = toBuffer(fileData);
+
+    function toBuffer(ab) {
+
+      return Buffer.from(ab);
+      // var buf = new Buffer(ab.byteLength);
+      // var view = new Uint8Array(ab);
+      // for (var i = 0; i < buf.length; ++i) {
+      //   buf[i] = view[i];
+      // }
+      // return buf;
+    }
+    callback();
+  }
 
   function sendRender() {
     res.render('index', {
@@ -65,16 +88,13 @@ file.mv('../uploads/' + file.name, function(err) {
       emotions: emotions
     })
   };
-}); 
+});
 
 router.post('/url', function (req, res, next) {
 
   image_url = req.body.url;
 
-console.log(req.body);
-  console.log("Image url: " + image_url);
-
-   CompVisionRequest(function doThis() {
+  CompVisionRequest(function doThis() {
     EmotionAPIRequest(function doThisNext() {
       GetSpotifyPlaylists(sendRender)
     })
@@ -87,9 +107,38 @@ console.log(req.body);
       emotions: emotions
     })
   };
-}); 
+});
 
-function CompVisionRequestStream(callback) {
+function AddFileToStorage(path, fileName) {
+
+  var fileService = azure.createFileService("DefaultEndpointsProtocol=https;AccountName=cogservicesmusic;AccountKey=N0Yq020gt+iPv+4oJOxCplvrmWmUr/tJbBWRz1VbEQUvXDb3nMFM05k2sxlAmAnEBpz2rKINcCi1DJ6D+xt8Tw==;EndpointSuffix=core.windows.net");
+  fileService.createShareIfNotExists('cognitiveservicesmusicfileshare', function (error, result, response) {
+    if (!error) {
+
+      fileService.createDirectoryIfNotExists('cognitiveservicesmusicfileshare', 'cognitiveservicesmusic', function (error, result, response) {
+        if (!error) {
+
+          var date = new Date();
+          var currentDateTime = date.getUTCMonth() + "-" + date.getUTCDate() + "-" + date.getUTCFullYear() + "_" + date.getUTCHours() + "-" + date.getUTCMinutes() + "-" + date.getUTCSeconds();
+
+          var newFileName = currentDateTime + "_" + fileName;
+
+          fileService.createFileFromLocalFile('cognitiveservicesmusicfileshare', 'cognitiveservicesmusic', newFileName, path, function (error, result, response) {
+            if (!error) {
+              console.log("File Uploaded to Azure File Storage");
+            }
+            else {
+              console.log("Error adding file to azure storage:" + error);
+            }
+          });
+        }
+      });
+
+    }
+  });
+}
+
+function CompVisionRequestStream(filePath, callback) {
   var uri = "https://westus.api.cognitive.microsoft.com/vision/v1.0/analyze?visualFeatures=Tags&language=en";
   var options = {
     headers: {
@@ -99,13 +148,15 @@ function CompVisionRequestStream(callback) {
   };
 
   try {
-    fs.createReadStream(image_address).pipe(request.post(uri, options, function (error, response, body) {
-
-      console.log("COMP VISION FILE UPLOAD TAGS: " + body);
-
-      var tgs = JSON.parse(body).tags;
-
-      ParseTags(tgs, callback);
+    fs.createReadStream("app\\controllers\\uploads\\uploadedFile.jpg").pipe(request.post(uri, options, function (error, response, body) {
+      if (!error) {
+        // console.log("COMP VISION FILE UPLOAD TAGS: " + body);
+        var tgs = JSON.parse(body).tags;
+        ParseTags(tgs, callback);
+      }
+      else {
+        console.log("Error with Computer Vision API File Upload: " + error);
+      }
     }));
   }
   catch (ex) {
@@ -116,13 +167,13 @@ function CompVisionRequestStream(callback) {
 
 function ParseTags(tgs, callback) {
   tags = [];
- for (var key in tgs) {
-        var tag = new Tag(tgs[key]);
-        tags.push(tag);
-      };
+  for (var key in tgs) {
+    var tag = new Tag(tgs[key]);
+    tags.push(tag);
+  };
 
-      console.log(tags);
-      callback();
+  console.log(tags);
+  callback();
 }
 
 function CompVisionRequest(callback) {
@@ -147,7 +198,7 @@ function CompVisionRequest(callback) {
     });
 }
 
-function EmotionAPIRequestStream(callback) {
+function EmotionAPIRequestStream(filePath, callback) {
   var uri = "https://westus.api.cognitive.microsoft.com/emotion/v1.0/recognize";
   var options = {
     headers: {
@@ -157,7 +208,7 @@ function EmotionAPIRequestStream(callback) {
   };
 
   try {
-    fs.createReadStream(image_address).pipe(request.post(uri, options, function (error, response, body) {
+    fs.createReadStream(filePath).pipe(request.post(uri, options, function (error, response, body) {
 
       if (error) {
         console.log("EMOTIONS ERROR: " + error);
